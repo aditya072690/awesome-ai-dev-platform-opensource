@@ -21,8 +21,18 @@ export class AxiosHttpClient extends BaseHttpClient {
   async sendRequest<ResponseBody extends HttpMessageBody = any>(
     request: HttpRequest<HttpRequestBody>
   ): Promise<HttpResponse<ResponseBody>> {
+    const originalTlsReject = process.env['NODE_TLS_REJECT_UNAUTHORIZED'];
     try {
-      process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+      // SECURITY: Never disable TLS verification in production
+      // Only allow disabling in development with explicit flag
+      if (process.env.NODE_ENV === 'development' && 
+          process.env.ALLOW_INSECURE_TLS === 'true') {
+        console.warn('⚠️  WARNING: TLS verification disabled. This is unsafe!');
+        process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+      } else {
+        // Ensure TLS verification is enabled
+        process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';
+      }
       const { urlWithoutQueryParams, queryParams: urlQueryParams } = this.getUrl(request);
       const headers = this.getHeaders(request);
       const axiosRequestMethod = this.getAxiosRequestMethod(request.method);
@@ -77,6 +87,14 @@ export class AxiosHttpClient extends BaseHttpClient {
       }
 
       throw e;
+    } finally {
+      // Always restore original TLS setting
+      if (originalTlsReject !== undefined) {
+        process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = originalTlsReject;
+      } else {
+        // Restore secure defaults
+        process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';
+      }
     }
   }
 
