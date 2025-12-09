@@ -66,7 +66,7 @@ export const sendMms = createAction({
     }),
   },
   async run({ auth, propsValue }) {
-    console.log(auth.apiKey);
+    // API key removed from logging for security
     const res = await httpClient.sendRequest<string[]>({
       method: HttpMethod.POST,
       url: 'https://automationapi.krispcall.com/api/v1/platform/activepiece/send-mms',

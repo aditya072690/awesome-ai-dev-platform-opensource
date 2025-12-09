@@ -21,25 +21,37 @@ export class GlobalApiKeyAuthnHandler extends BaseSecurityHandler {
         return Promise.resolve(routeMatches && !skipAuth)
     }
 
-    protected doHandle(request: FastifyRequest): Promise<void> {
+    protected async doHandle(request: FastifyRequest): Promise<void> {
         const requestApiKey = request.headers[GlobalApiKeyAuthnHandler.HEADER_NAME]
         const keyNotMatching = requestApiKey !== GlobalApiKeyAuthnHandler.API_KEY
 
         if (keyNotMatching || isNil(GlobalApiKeyAuthnHandler.API_KEY)) {
+            request.log.warn({
+                hasApiKey: !!requestApiKey,
+                path: request.url,
+                method: request.method,
+            }, 'Invalid API key attempt')
             throw new AIxBlockError({
                 code: ErrorCode.INVALID_API_KEY,
                 params: {},
             })
         }
 
+        const principalId = `SUPER_USER_${apId()}`
         request.principal = {
-            id: `SUPER_USER_${apId()}`,
+            id: principalId,
             type: PrincipalType.SUPER_USER,
             projectId: `SUPER_USER_${apId()}`,
             platform: {
                 id: `SUPER_USER_${apId()}`,
             },
         }
+
+        request.log.info({
+            principalId,
+            path: request.url,
+            method: request.method,
+        }, 'Super user access granted via global API key')
 
         return Promise.resolve()
     }

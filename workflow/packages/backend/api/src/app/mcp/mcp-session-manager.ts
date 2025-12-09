@@ -2,6 +2,8 @@ import { apId, isNil } from 'workflow-shared'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { FastifyBaseLogger } from 'fastify'
+import { randomBytes } from 'crypto'
+import { promisify } from 'util'
 import { distributedStore } from '../helper/keyvalue'
 import { pubsub } from '../helper/pubsub'
 
@@ -57,10 +59,14 @@ export const mcpSessionManager = (logger: FastifyBaseLogger) => {
             if (sessions.has(sessionId)) {
                 throw new Error('Session already exists')
             }
+            
+            if (!sessionId || sessionId.length < 16) {
+                throw new Error('Invalid session ID: too short or empty')
+            }
+            
             sessions.set(sessionId, { server, transport })
-            logger.info({ sessionId }, 'MCP session added')
+            logger.info({ sessionId: sessionId.substring(0, 8) + '...' }, 'MCP session added')
 
-            // Store session information in distributed store
             await distributedStore().put(constructSessionKey(sessionId), serverId)
         },
 

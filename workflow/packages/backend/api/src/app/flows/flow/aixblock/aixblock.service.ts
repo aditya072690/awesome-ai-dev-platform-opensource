@@ -19,7 +19,7 @@ export const aixblockService = (log: FastifyBaseLogger) => ({
         const { projectId } = request.principal as EnginePrincipal;
         const query: any = request.query;
         const modelType = query.modelType;
-        console.log('request.principal aixblock service', request.principal);
+        request.log.debug({ principalType: request.principal?.type }, 'Request received in aixblock service');
 
         const platformId = await projectService.getPlatformId(projectId);
         const resp = await aiProviderService.getOrThrow({
@@ -166,6 +166,6 @@ export const aixblockService = (log: FastifyBaseLogger) => ({
         const userId = request.principal.id;
         const user = await userService.getOneOrFail({ id: userId });
         const identity = await userIdentityRepository().findOneByOrFail({ id: user.identityId });
-        console.log(principal)
+        request.log.debug({ principalType: principal?.type }, 'Principal processed in aixblock service')
     }
 });

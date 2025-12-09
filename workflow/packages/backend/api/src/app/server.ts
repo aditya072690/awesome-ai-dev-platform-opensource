@@ -52,8 +52,10 @@ async function setupBaseApp(): Promise<FastifyInstance> {
     await app.register(fastifyMultipart, {
         attachFieldsToBody: 'keyValues',
         async onFile(part: MultipartFile) {
+            const { sanitizeFileName } = await import('./helper/file-sanitizer')
+            const sanitizedFilename = part.filename ? sanitizeFileName(part.filename) : part.filename
             const apFile: ApMultipartFile = {
-                filename: part.filename,
+                filename: sanitizedFilename,
                 data: await part.toBuffer(),
                 type: 'file',
             };

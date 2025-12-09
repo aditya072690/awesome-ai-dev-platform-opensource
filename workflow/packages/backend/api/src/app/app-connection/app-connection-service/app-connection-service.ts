@@ -49,7 +49,7 @@ import { paginationHelper } from '../../helper/pagination/pagination-utils'
 import { system } from '../../helper/system/system'
 import { mcpBlockService } from '../../mcp/mcp-block-service'
 import { mcpService } from '../../mcp/mcp-service'
-import { projectRepo } from '../../project/project-service'
+import { projectRepo, projectService } from '../../project/project-service'
 import { userService } from '../../user/user-service'
 import { userInteractionWatcher } from '../../workers/user-interaction-watcher'
 import {
@@ -138,7 +138,8 @@ export const appConnectionService = (log: FastifyBaseLogger) => ({
         projectId,
         platformId,
         externalId,
-    }: GetOneByName): Promise<AppConnection | null> {
+        principalId,
+    }: GetOneByName & { principalId?: string }): Promise<AppConnection | null> {
         const encryptedAppConnection = await appConnectionsRepo().findOne({
             where: {
                 ...APArrayContains('projectIds', [projectId]),
@@ -150,6 +151,32 @@ export const appConnectionService = (log: FastifyBaseLogger) => ({
         if (isNil(encryptedAppConnection)) {
             return null
         }
+        
+        if (principalId && encryptedAppConnection.projectIds && encryptedAppConnection.projectIds.length > 0) {
+            const hasAccessToAll = await Promise.all(
+                encryptedAppConnection.projectIds.map(async (projId) => {
+                    const projectRole = await projectMemberService(log).getRole({
+                        userId: principalId,
+                        projectId: projId,
+                    })
+                    if (projectRole) {
+                        return true
+                    }
+                    const project = await projectService.getOne(projId)
+                    return project?.ownerId === principalId
+                })
+            )
+            
+            if (!hasAccessToAll.every(hasAccess => hasAccess)) {
+                throw new AIxBlockError({
+                    code: ErrorCode.AUTHORIZATION,
+                    params: {
+                        message: 'Access denied to one or more projects',
+                    },
+                })
+            }
+        }
+        
         const connection = await this.decryptAndRefreshConnection(encryptedAppConnection, projectId, log)
 
         if (isNil(connection)) {

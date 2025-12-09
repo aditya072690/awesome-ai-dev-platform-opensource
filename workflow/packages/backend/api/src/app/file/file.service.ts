@@ -16,6 +16,9 @@ import {
     ProjectId,
 } from 'workflow-shared'
 import { repoFactory } from '../core/db/repo-factory'
+import { projectMemberService } from '../ee/project-members/project-member.service'
+import { sanitizeFileName } from '../helper/file-sanitizer'
+import { projectService } from '../project/project-service'
 import { system } from '../helper/system/system'
 import { FileEntity } from './file.entity'
 import { s3Helper } from './s3-helper'
@@ -35,12 +38,13 @@ const saveFileToDb = async (baseFile: BaseFile, data: SaveParams['data']) => {
 }
 export const fileService = (log: FastifyBaseLogger) => ({
     async save(params: SaveParams): Promise<File> {
+        const sanitizedFileName = params.fileName ? sanitizeFileName(params.fileName) : undefined
         const baseFile: BaseFile = {
             id: params.fileId ?? apId(),
             projectId: params.projectId,
             platformId: params.platformId,
             type: params.type,
-            fileName: params.fileName,
+            fileName: sanitizedFileName,
             compression: params.compression,
             size: params.size,
             metadata: params.metadata,
@@ -71,7 +75,33 @@ export const fileService = (log: FastifyBaseLogger) => ({
             }
         }
     },
-    async getFile({ projectId, fileId, type }: GetOneParams): Promise<File | null> {
+    async getFile({ projectId, fileId, type, principalId }: GetOneParams & { principalId?: string }): Promise<File | null> {
+        if (projectId) {
+            if (!principalId) {
+                throw new AIxBlockError({
+                    code: ErrorCode.AUTHORIZATION,
+                    params: {
+                        message: 'Principal ID required for file access',
+                    },
+                })
+            }
+            
+            const projectRole = await projectMemberService(log).getRole({
+                userId: principalId,
+                projectId,
+            })
+            if (!projectRole) {
+                const project = await projectService.getOne(projectId)
+                if (!project || (project.ownerId !== principalId)) {
+                    throw new AIxBlockError({
+                        code: ErrorCode.AUTHORIZATION,
+                        params: {
+                            message: 'Access denied to project',
+                        },
+                    })
+                }
+            }
+        }
         const file = await fileRepo().findOneBy({
             projectId,
             id: fileId,
@@ -103,7 +133,33 @@ export const fileService = (log: FastifyBaseLogger) => ({
         }
 
     },
-    async getDataOrThrow({ projectId, fileId, type }: GetOneParams): Promise<GetDataResponse> {
+    async getDataOrThrow({ projectId, fileId, type, principalId }: GetOneParams & { principalId?: string }): Promise<GetDataResponse> {
+        if (projectId) {
+            if (!principalId) {
+                throw new AIxBlockError({
+                    code: ErrorCode.AUTHORIZATION,
+                    params: {
+                        message: 'Principal ID required for file access',
+                    },
+                })
+            }
+            
+            const projectRole = await projectMemberService(log).getRole({
+                userId: principalId,
+                projectId,
+            })
+            if (!projectRole) {
+                const project = await projectService.getOne(projectId)
+                if (!project || (project.ownerId !== principalId)) {
+                    throw new AIxBlockError({
+                        code: ErrorCode.AUTHORIZATION,
+                        params: {
+                            message: 'Access denied to project',
+                        },
+                    })
+                }
+            }
+        }
         const file = await fileRepo().findOneBy({
             projectId,
             id: fileId,

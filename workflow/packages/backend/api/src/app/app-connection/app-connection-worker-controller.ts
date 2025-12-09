@@ -22,6 +22,7 @@ export const appConnectionWorkerController: FastifyPluginAsyncTypebox = async (a
             projectId: enginePrincipal.projectId,
             platformId: enginePrincipal.platform.id,
             externalId: request.params.externalId,
+            principalId: enginePrincipal.id,
         })
 
         if (isNil(appConnection)) {

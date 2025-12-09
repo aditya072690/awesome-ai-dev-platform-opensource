@@ -19,13 +19,13 @@ export const proxyController: FastifyPluginAsyncTypebox = async (
 
 
         const platformId = await projectService.getPlatformId(projectId)
-        console.log('principal proxy', request.principal)
+        request.log.debug({ principalType: request.principal?.type }, 'Request received in AI provider proxy')
         const aiProvider = await aiProviderService.getOrThrow({
             platformId,
             provider,
             projectId,
         })
-        console.log('principal proxy aiProvider', aiProvider);
+        request.log.debug({ aiProvider: aiProvider?.name }, 'AI provider selected')
         const exceededLimit = await usageService(request.log).aiTokensExceededLimit(projectId, 0)
         if (exceededLimit) {
             return reply.code(StatusCodes.PAYMENT_REQUIRED).send(

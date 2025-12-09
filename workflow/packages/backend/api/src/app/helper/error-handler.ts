@@ -56,8 +56,17 @@ export const errorHandler = async (
         ) {
             exceptionHandler.handle(error, request.log)
         }
+        
+        const isProduction = process.env.NODE_ENV === 'production'
+        const errorResponse = isProduction
+            ? {
+                message: 'An error occurred',
+                statusCode: error.statusCode ?? StatusCodes.INTERNAL_SERVER_ERROR,
+            }
+            : error
+        
         await reply
             .status(error.statusCode ?? StatusCodes.INTERNAL_SERVER_ERROR)
-            .send(error)
+            .send(errorResponse)
     }
 }
