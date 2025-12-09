@@ -16,7 +16,6 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { assertNotNullOrUndefined } from 'workflow-shared';
 import { httpMethodDropdown } from '../common/props';
 
-// SECURITY: URL validation to prevent SSRF attacks
 function validateUrl(url: string): void {
     let parsedUrl: URL;
     try {
@@ -209,7 +208,6 @@ export const httpSendRequestAction = createAction({
     assertNotNullOrUndefined(method, 'Method');
     assertNotNullOrUndefined(url, 'URL');
 
-    // SECURITY: Validate URL to prevent SSRF attacks
     validateUrl(url);
 
     const request: HttpRequest = {

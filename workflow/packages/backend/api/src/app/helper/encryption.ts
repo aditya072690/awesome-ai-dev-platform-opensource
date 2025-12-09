@@ -35,18 +35,27 @@ const loadEncryptionKey = async (queueMode: QueueMode): Promise<string | null> =
 }
 
 const generateAndStoreSecret = async (): Promise<string> => {
-    const secretLengthInBytes = 16
+    const secretLengthInBytes = 32
     const secretBuffer = await promisify(randomBytes)(secretLengthInBytes)
-    const secret = secretBuffer.toString('hex') // Convert to hexadecimal
+    const secret = secretBuffer.toString('hex') // Convert to hexadecimal (64 hex chars = 32 bytes)
     await localFileStore.save(AppSystemProp.ENCRYPTION_KEY, secret)
     return secret
 }
 
 
 function encryptString(inputString: string): EncryptedObject {
-    const iv = crypto.randomBytes(ivLength) // Generate a random initialization vector
+    const iv = crypto.randomBytes(ivLength)
     assertNotNullOrUndefined(secret, 'secret')
-    const key = Buffer.from(secret, 'binary')
+    
+    let key: Buffer;
+    if (secret.length === 32) {
+        key = crypto.createHash('sha256').update(secret, 'hex').digest();
+    } else if (secret.length === 64) {
+        key = Buffer.from(secret, 'hex');
+    } else {
+        throw new Error(`Invalid encryption key length: ${secret.length} characters. Expected 32 or 64 hex characters.`);
+    }
+    
     const cipher = crypto.createCipheriv(algorithm, key, iv) // Create a cipher with the key and initialization vector
     let encrypted = cipher.update(inputString, 'utf8', 'hex')
     encrypted += cipher.final('hex')
@@ -63,7 +72,16 @@ function encryptObject(object: unknown): EncryptedObject {
 
 function decryptObject<T>(encryptedObject: EncryptedObject): T {
     const iv = Buffer.from(encryptedObject.iv, 'hex')
-    const key = Buffer.from(secret!, 'binary')
+    
+    let key: Buffer;
+    if (secret!.length === 32) {
+        key = crypto.createHash('sha256').update(secret!, 'hex').digest();
+    } else if (secret!.length === 64) {
+        key = Buffer.from(secret!, 'hex');
+    } else {
+        throw new Error(`Invalid encryption key length: ${secret!.length} characters. Expected 32 or 64 hex characters.`);
+    }
+    
     const decipher = crypto.createDecipheriv(algorithm, key, iv)
     let decrypted = decipher.update(encryptedObject.data, 'hex', 'utf8')
     decrypted += decipher.final('utf8')
@@ -71,7 +89,16 @@ function decryptObject<T>(encryptedObject: EncryptedObject): T {
 }
 function decryptString(encryptedObject: EncryptedObject): string {
     const iv = Buffer.from(encryptedObject.iv, 'hex')
-    const key = Buffer.from(secret!, 'binary')
+    
+    let key: Buffer;
+    if (secret!.length === 32) {
+        key = crypto.createHash('sha256').update(secret!, 'hex').digest();
+    } else if (secret!.length === 64) {
+        key = Buffer.from(secret!, 'hex');
+    } else {
+        throw new Error(`Invalid encryption key length: ${secret!.length} characters. Expected 32 or 64 hex characters.`);
+    }
+    
     const decipher = crypto.createDecipheriv(algorithm, key, iv)
     let decrypted = decipher.update(encryptedObject.data, 'hex', 'utf8')
     decrypted += decipher.final('utf8')

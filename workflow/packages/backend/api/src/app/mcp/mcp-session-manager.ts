@@ -8,6 +8,7 @@ import { pubsub } from '../helper/pubsub'
 type SessionData = {
     server: McpServer
     transport: SSEServerTransport
+    principalId?: string
 }
 
 const sessions: Map<string, SessionData> = new Map()
@@ -53,20 +54,28 @@ export const mcpSessionManager = (logger: FastifyBaseLogger) => {
                 logger.error({ error }, 'Failed to subscribe to pubsub')
             })
         },
-        add: async (sessionId: string, server: McpServer, transport: SSEServerTransport): Promise<void> => {
+        add: async (sessionId: string, server: McpServer, transport: SSEServerTransport, principalId?: string): Promise<void> => {
             if (sessions.has(sessionId)) {
                 throw new Error('Session already exists')
             }
-            sessions.set(sessionId, { server, transport })
-            logger.info({ sessionId }, 'MCP session added')
+            sessions.set(sessionId, { server, transport, principalId })
+            logger.info({ sessionId, principalId }, 'MCP session added')
 
-            // Store session information in distributed store
-            await distributedStore().put(constructSessionKey(sessionId), serverId)
+            await distributedStore().put(constructSessionKey(sessionId), JSON.stringify({ serverId, principalId }))
         },
 
         publish: async (sessionId: string, body: unknown, operation: 'remove' | 'message' = 'message'): Promise<void> => {
-            const serverId = await distributedStore().get<string>(constructSessionKey(sessionId))
-            if (serverId) {
+            const sessionDataStr = await distributedStore().get<string>(constructSessionKey(sessionId))
+            if (sessionDataStr) {
+                // Parse stored session data (may be old format with just serverId, or new format with JSON)
+                let serverId: string;
+                try {
+                    const sessionData = JSON.parse(sessionDataStr);
+                    serverId = sessionData.serverId || sessionData; // Support both old and new formats
+                } catch {
+                    // Old format: just serverId as string
+                    serverId = sessionDataStr;
+                }
                 logger.info({ sessionId, body, operation }, 'Publishing message')
                 await pubsub().publish(`server:${serverId}`, JSON.stringify({ sessionId, body, operation }))
             }
@@ -81,6 +90,17 @@ export function constructSessionKey(sessionId: string): string {
 
 export function get(sessionId: string): SessionData | undefined {
     return sessions.get(sessionId)
+}
+
+export function verifySessionOwnership(sessionId: string, principalId: string | undefined): boolean {
+    const session = get(sessionId)
+    if (!session) {
+        return false
+    }
+    if (!session.principalId) {
+        return true
+    }
+    return session.principalId === principalId
 }
 
 export async function remove(sessionId: string): Promise<void> {

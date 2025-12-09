@@ -74,10 +74,28 @@ async function setupBaseApp(): Promise<FastifyInstance> {
 
     await app.register(formBody, { parser: (str) => qs.parse(str) })
     app.setErrorHandler(errorHandler)
+    
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+        'https://app.aixblock.io',
+        'https://aixblock.io',
+    ]
+    
     await app.register(cors, {
-        origin: '*',
-        exposedHeaders: ['*'],
-        methods: ['*'],
+        origin: (origin, callback) => {
+            // Allow requests with no origin (mobile apps, Postman, etc.)
+            if (!origin) {
+                return callback(null, true)
+            }
+            
+            if (allowedOrigins.includes(origin)) {
+                callback(null, true)
+            } else {
+                callback(new Error('Not allowed by CORS'), false)
+            }
+        },
+        credentials: true,
+        exposedHeaders: ['Content-Type', 'Authorization'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     })
     // SurveyMonkey
     app.addContentTypeParser(

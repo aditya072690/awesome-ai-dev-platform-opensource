@@ -29,21 +29,27 @@ Payload | null
     const principalProjectId = request.principal?.projectId
 
     if (isObject(payload) && !isNil(principalProjectId)) {
-        let verdict: AuthzVerdict = 'ALLOW'
+        let verdict: AuthzVerdict = 'DENY'
 
         if ('projectId' in payload) {
-            if (payload.projectId !== principalProjectId) {
+            const payloadProjectId = payload.projectId
+            // Explicitly check for null/undefined
+            if (isNil(payloadProjectId)) {
+                verdict = 'DENY'
+            } else if (payloadProjectId === principalProjectId) {
+                verdict = 'ALLOW'
+            } else {
                 verdict = 'DENY'
             }
         }
         else if ('data' in payload && Array.isArray(payload.data)) {
-            const someEntityNotOwnedByCurrentProject = payload.data.some((entity) => {
-                return 'projectId' in entity && entity.projectId !== principalProjectId
+            const allEntitiesValid = payload.data.every((entity) => {
+                if (!('projectId' in entity) || isNil(entity.projectId)) {
+                    return false // Reject entities without projectId
+                }
+                return entity.projectId === principalProjectId
             })
-
-            if (someEntityNotOwnedByCurrentProject) {
-                verdict = 'DENY'
-            }
+            verdict = allEntitiesValid ? 'ALLOW' : 'DENY'
         }
 
         if (verdict === 'DENY') {

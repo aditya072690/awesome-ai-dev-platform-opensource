@@ -76,9 +76,29 @@ function constructUrl(params: OAuth2PopupParams, pckeChallenge: string) {
 }
 
 function getCode(redirectUrl: string): Promise<string> {
-    return new Promise<string>((resolve) => {
+    return new Promise<string>((resolve, reject) => {
+        let expectedOrigin: string;
+        try {
+            const url = new URL(redirectUrl);
+            expectedOrigin = url.origin;
+        } catch {
+            reject(new Error('Invalid redirect URL'));
+            return;
+        }
+
+        const allowedOrigins = [
+            'https://app.aixblock.io',
+            'https://workflow.aixblock.io',
+            window.location.origin,
+        ];
+
+        if (!allowedOrigins.includes(expectedOrigin)) {
+            reject(new Error('Redirect URL not in allowed list'));
+            return;
+        }
+
         window.addEventListener('message', function handler(event) {
-            if (redirectUrl && redirectUrl.startsWith(event.origin) && event.data['code']) {
+            if (event.origin === expectedOrigin && event.data['code']) {
                 resolve(decodeURIComponent(event.data.code));
                 currentPopup?.close();
                 window.removeEventListener('message', handler);

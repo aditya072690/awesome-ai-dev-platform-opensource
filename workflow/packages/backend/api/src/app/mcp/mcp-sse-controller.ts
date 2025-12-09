@@ -20,7 +20,7 @@ export const mcpSseController: FastifyPluginAsyncTypebox = async (app) => {
             logger: req.log,
         })
 
-        await mcpSessionManager(req.log).add(transport.sessionId, server, transport)
+        await mcpSessionManager(req.log).add(transport.sessionId, server, transport, req.principal?.id)
 
         await server.connect(transport)
 
@@ -41,6 +41,12 @@ export const mcpSseController: FastifyPluginAsyncTypebox = async (app) => {
 
         if (!sessionId) {
             await reply.code(400).send({ message: 'Missing session ID' })
+            return
+        }
+
+        const { verifySessionOwnership } = await import('./mcp-session-manager')
+        if (!verifySessionOwnership(sessionId, req.principal?.id)) {
+            await reply.code(403).send({ message: 'Forbidden: Session ownership verification failed' })
             return
         }
 
