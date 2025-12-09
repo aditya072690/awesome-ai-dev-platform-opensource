@@ -16,6 +16,51 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { assertNotNullOrUndefined } from 'workflow-shared';
 import { httpMethodDropdown } from '../common/props';
 
+function validateUrl(url: string): void {
+    let parsedUrl: URL;
+    try {
+        parsedUrl = new URL(url);
+    } catch {
+        throw new Error('Invalid URL format');
+    }
+
+    // Block private IP ranges
+    const privateIpPatterns = [
+        /^127\./,           // 127.0.0.0/8
+        /^10\./,            // 10.0.0.0/8
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./,  // 172.16.0.0/12
+        /^192\.168\./,      // 192.168.0.0/16
+        /^169\.254\./,      // Link-local
+        /^::1$/,            // IPv6 localhost
+        /^fc00:/,           // IPv6 private
+        /^fe80:/,           // IPv6 link-local
+    ];
+
+    const hostname = parsedUrl.hostname;
+    
+    // Block localhost variations
+    if (hostname === 'localhost' || hostname === '0.0.0.0') {
+        throw new Error('Localhost URLs are not allowed');
+    }
+
+    // Block private IPs
+    for (const pattern of privateIpPatterns) {
+        if (pattern.test(hostname)) {
+            throw new Error('Private IP addresses are not allowed');
+        }
+    }
+
+    // Block file:// protocol
+    if (parsedUrl.protocol === 'file:') {
+        throw new Error('File protocol is not allowed');
+    }
+
+    // Only allow http/https
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new Error('Only HTTP and HTTPS protocols are allowed');
+    }
+}
+
 export const httpSendRequestAction = createAction({
   name: 'send_request',
   displayName: 'Send HTTP request',
@@ -162,6 +207,8 @@ export const httpSendRequestAction = createAction({
 
     assertNotNullOrUndefined(method, 'Method');
     assertNotNullOrUndefined(url, 'URL');
+
+    validateUrl(url);
 
     const request: HttpRequest = {
       method,
